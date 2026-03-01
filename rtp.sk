@@ -1,0 +1,66 @@
+options:
+    rtp-radius: 10000
+    rtp-warmup: 5 seconds
+    rtp-cooldown: 30 seconds
+
+
+command /rtp:
+    trigger:
+
+        # Cooldown check (safe math method)
+        if {rtp.cooldown.%uuid of player%} is set:
+            set {_remaining} to difference between {rtp.cooldown.%uuid of player%} and now
+            if {_remaining} > 0 seconds:
+                send "&cYou must wait %{_remaining}% before using RTP again."
+                stop
+
+        # Already teleporting?
+        if {rtp.warmup.%uuid of player%} is true:
+            send "&cYou are already teleporting!"
+            stop
+
+        set {rtp.warmup.%uuid of player%} to true
+        set {_start} to location of player
+
+        send "&eTeleporting in {@rtp-warmup}... Don't move!"
+        wait {@rtp-warmup}
+
+        # Cancel if moved
+        if location of player is not {_start}:
+            delete {rtp.warmup.%uuid of player%}
+            send "&cTeleport cancelled because you moved!"
+            stop
+
+        delete {rtp.warmup.%uuid of player%}
+
+        safeRTP(player)
+
+        # Store cooldown as future date
+        set {rtp.cooldown.%uuid of player%} to now + {@rtp-cooldown}
+        send "&aYou have been randomly teleported!"
+
+
+function safeRTP(p: player):
+    set {_world} to world of {_p}
+
+    loop 40 times:
+        set {_x} to random integer between -{@rtp-radius} and {@rtp-radius}
+        set {_z} to random integer between -{@rtp-radius} and {@rtp-radius}
+
+        set {_loc} to location({_x}, 0, {_z}, {_world})
+        set {_highest} to highest block at {_loc}
+        set {_y} to y-coordinate of {_highest}
+
+        set {_ground} to block at location({_x}, {_y}, {_z}, {_world})
+        set {_head} to block at location({_x}, {_y}+1, {_z}, {_world})
+        set {_above} to block at location({_x}, {_y}+2, {_z}, {_world})
+
+        if {_ground} is solid:
+            if type of {_ground} is not water:
+                if type of {_ground} is not lava:
+                    if {_head} is air:
+                        if {_above} is air:
+                            teleport {_p} to location({_x}, {_y}+1, {_z}, {_world})
+                            stop
+
+    send "&cFailed to find a safe location. Try again." to {_p}
