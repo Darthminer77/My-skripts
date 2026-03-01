@@ -1,20 +1,29 @@
 options:
     rtp-radius: 10000
-    rtp-warmup: 5 seconds
-    rtp-cooldown: 30 seconds
+    rtp-warmup: 5
+    rtp-cooldown: 30
 
+command /clearrtpvars:
+    permission: op
+    trigger:
+        delete {rtp::*}
+        send "&aAll RTP variables deleted."
 
 command /rtp:
     trigger:
 
-        # Cooldown check (safe math method)
-        if {rtp.cooldown.%uuid of player%} is set:
-            set {_remaining} to difference between {rtp.cooldown.%uuid of player%} and now
-            if {_remaining} > 0 seconds:
-                send "&cYou must wait %{_remaining}% before using RTP again."
+        # Get current unix time in seconds
+        set {_now} to difference between now and date "1970-01-01 00:00:00 UTC"
+        set {_now} to {_now} parsed as number
+
+        # Cooldown check
+        if {rtp.next.%uuid of player%} is set:
+            if {_now} < {rtp.next.%uuid of player%}:
+                set {_left} to {rtp.next.%uuid of player%} - {_now}
+                send "&cYou must wait %{_left}% seconds before using RTP again."
                 stop
 
-        # Already teleporting?
+        # Warmup check
         if {rtp.warmup.%uuid of player%} is true:
             send "&cYou are already teleporting!"
             stop
@@ -22,11 +31,10 @@ command /rtp:
         set {rtp.warmup.%uuid of player%} to true
         set {_start} to location of player
 
-        send "&eTeleporting in {@rtp-warmup}... Don't move!"
-        wait {@rtp-warmup}
+        send "&eTeleporting in {@rtp-warmup} seconds... Don't move!"
+        wait {@rtp-warmup} seconds
 
-        # Cancel if moved
-        if location of player is not {_start}:
+        if location of player != {_start}:
             delete {rtp.warmup.%uuid of player%}
             send "&cTeleport cancelled because you moved!"
             stop
@@ -35,11 +43,10 @@ command /rtp:
 
         safeRTP(player)
 
-        # Store cooldown as future date
-        set {rtp.cooldown.%uuid of player%} to now + {@rtp-cooldown}
+        # Store NEXT allowed time (unix seconds)
+        set {rtp.next.%uuid of player%} to {_now} + {@rtp-cooldown}
+
         send "&aYou have been randomly teleported!"
-
-
 function safeRTP(p: player):
     set {_world} to world of {_p}
 
@@ -47,8 +54,7 @@ function safeRTP(p: player):
         set {_x} to random integer between -{@rtp-radius} and {@rtp-radius}
         set {_z} to random integer between -{@rtp-radius} and {@rtp-radius}
 
-        set {_loc} to location({_x}, 0, {_z}, {_world})
-        set {_highest} to highest block at {_loc}
+        set {_highest} to highest block at location({_x}, 0, {_z}, {_world})
         set {_y} to y-coordinate of {_highest}
 
         set {_ground} to block at location({_x}, {_y}, {_z}, {_world})
@@ -63,4 +69,4 @@ function safeRTP(p: player):
                             teleport {_p} to location({_x}, {_y}+1, {_z}, {_world})
                             stop
 
-    send "&cFailed to find a safe location. Try again." to {_p}
+    send "&cFailed to find safe location. Try again." to {_p}
